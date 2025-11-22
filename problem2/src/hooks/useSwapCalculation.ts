@@ -1,22 +1,8 @@
-import { useCallback } from 'react';
-import { convertAmount } from '@/lib/api';
+import { convertAmount, MAX_INPUT_LENGTH, parseInputValue } from '@/lib/swapHelper';
 import { useSwapStore } from '@/store/swapStore';
 import type { Token } from '@/types';
-
-const MAX_INPUT_LENGTH = 20;
-
-// Format number with commas for display
-export const formatInputValue = (value: string): string => {
-  if (!value) return '';
-  const parts = value.split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
-};
-
-// Remove commas for calculation
-const parseInputValue = (value: string): string => {
-  return value.replace(/,/g, '');
-};
+import { useCallback } from 'react';
+// All formatting and parsing logic is now in swapHelper.ts
 
 export const useSwapCalculation = (
   selectedFromToken: Token | undefined,
@@ -37,8 +23,15 @@ export const useSwapCalculation = (
 
       if (rawValue && !isNaN(parseFloat(rawValue))) {
         const amount = parseFloat(rawValue);
-        const converted = convertAmount(amount, selectedFromToken, selectedToToken);
-        setToAmount(converted > 0 ? String(converted) : '');
+        // Nếu token giống nhau thì toAmount = fromAmount
+        if (selectedFromToken && selectedToToken && selectedFromToken.currency === selectedToToken.currency) {
+          setToAmount(rawValue);
+        } else if (selectedFromToken && selectedToToken && selectedFromToken.price > 0 && selectedToToken.price > 0) {
+          const converted = convertAmount(amount, selectedFromToken, selectedToToken);
+          setToAmount(converted > 0 ? String(converted) : '');
+        } else {
+          setToAmount('');
+        }
       } else {
         setToAmount('');
       }
@@ -56,8 +49,15 @@ export const useSwapCalculation = (
 
       if (rawValue && !isNaN(parseFloat(rawValue))) {
         const amount = parseFloat(rawValue);
-        const converted = convertAmount(amount, selectedToToken, selectedFromToken);
-        setFromAmount(converted > 0 ? String(converted) : '');
+        // Nếu token giống nhau thì fromAmount = toAmount
+        if (selectedFromToken && selectedToToken && selectedFromToken.currency === selectedToToken.currency) {
+          setFromAmount(rawValue);
+        } else if (selectedFromToken && selectedToToken && selectedFromToken.price > 0 && selectedToToken.price > 0) {
+          const converted = convertAmount(amount, selectedToToken, selectedFromToken);
+          setFromAmount(converted > 0 ? String(converted) : '');
+        } else {
+          setFromAmount('');
+        }
       } else {
         setFromAmount('');
       }

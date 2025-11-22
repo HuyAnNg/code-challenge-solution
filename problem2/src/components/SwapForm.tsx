@@ -1,5 +1,8 @@
-import { useMemo, useEffect } from "react";
-import { ArrowDownUp, Loader2 } from "lucide-react";
+import { AmountInput } from "@/components/AmountInput";
+import { ExchangeRateInfo } from "@/components/ExchangeRateInfo";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { TokenSelect } from "@/components/TokenSelect";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -7,40 +10,44 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useTokens } from "@/hooks/useTokens";
+import { formatInputValue } from "@/lib/swapHelper";
 import { useSwapValidation } from "@/hooks/useSwapValidation";
-import {
-  useSwapCalculation,
-  formatInputValue,
-} from "@/hooks/useSwapCalculation";
-import { TokenSelect } from "@/components/TokenSelect";
-import { AmountInput } from "@/components/AmountInput";
-import { ExchangeRateInfo } from "@/components/ExchangeRateInfo";
-import { useSwapStore } from "@/store/swapStore";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import type { Token } from "@/types";
+import { ArrowDownUp, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export function SwapForm() {
-  useTokens();
-  const {
-    tokens,
-    loading,
-    fromToken,
-    toToken,
-    isSwapping,
-    setFromToken,
-    setToToken,
-    setIsSwapping,
-    switchTokens,
-  } = useSwapStore();
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fromToken, setFromToken] = useState("");
+  const [toToken, setToToken] = useState("");
+  const [fromAmount, setFromAmount] = useState("");
+  const [toAmount, setToAmount] = useState("");
+  const [isSwapping, setIsSwapping] = useState(false);
+
+  useEffect(() => {
+    async function fetchTokens() {
+      setLoading(true);
+      const fetched = await import("@/lib/api").then((m) =>
+        m.fetchTokenPrices()
+      );
+      setTokens(fetched);
+      setLoading(false);
+      if (fetched.length >= 2) {
+        setFromToken(fetched[0].currency);
+        setToToken(fetched[1].currency);
+      }
+    }
+    fetchTokens();
+  }, []);
 
   const selectedFromToken = useMemo(
-    () => tokens.find((t) => t.currency === fromToken),
+    () => tokens.find((t: Token) => t.currency === fromToken),
     [tokens, fromToken]
   );
 
   const selectedToToken = useMemo(
-    () => tokens.find((t) => t.currency === toToken),
+    () => tokens.find((t: Token) => t.currency === toToken),
     [tokens, toToken]
   );
 
@@ -55,34 +62,110 @@ export function SwapForm() {
     return selectedFromToken.price / selectedToToken.price;
   }, [selectedFromToken, selectedToToken]);
 
-  const { validateSwap, clearError, getError } = useSwapValidation();
+  const { validateSwap, getError } = useSwapValidation();
 
-  const { fromAmount, toAmount, handleFromAmountChange, handleToAmountChange } =
-    useSwapCalculation(
-      selectedFromToken,
-      selectedToToken,
-      () => clearError("fromAmount"),
-      () => clearError("toAmount")
-    );
+  // Calculation logic
+  // Helper for removing commas
+  const parseInputValue = (value: string) => value.replace(/,/g, "");
+  const MAX_INPUT_LENGTH = 20;
 
-  // Tự động đổi số tiền khi chọn token khác
-  useEffect(() => {
-    if (fromAmount && selectedFromToken && selectedToToken) {
-      // Chỉ cập nhật khi token đổi
-      handleFromAmountChange(fromAmount); // chỉ gọi khi token đổi
+  const handleFromAmountChange = (value: string) => {
+    const rawValue = parseInputValue(value);
+    if (rawValue.length > MAX_INPUT_LENGTH) return;
+    if (rawValue === "" || /^\d*\.?\d*$/.test(rawValue)) {
+      setFromAmount(rawValue);
+      if (
+        selectedFromToken &&
+        selectedToToken &&
+        selectedFromToken.currency === selectedToToken.currency
+      ) {
+        setToAmount(rawValue);
+        return;
+      }
+      // Always run conversion logic, even if rawValue is empty
+      if (rawValue && !isNaN(parseFloat(rawValue))) {
+        const amount = parseFloat(rawValue);
+        if (
+          selectedFromToken &&
+          selectedToToken &&
+          selectedFromToken.price > 0 &&
+          selectedToToken.price > 0
+        ) {
+          import("@/lib/api").then((m) => {
+            const converted = m.convertAmount(
+              amount,
+              selectedFromToken,
+              selectedToToken
+            );
+            setToAmount(converted > 0 ? String(converted) : "");
+          });
+        } else {
+          setToAmount("");
+        }
+      } else {
+        // If input is empty, clear the toAmount
+        setToAmount("");
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFromToken, selectedToToken]);
-
-  const handleSwitchTokens = () => {
-    switchTokens();
   };
+
+  const handleToAmountChange = (value: string) => {
+    const rawValue = parseInputValue(value);
+    if (rawValue.length > MAX_INPUT_LENGTH) return;
+    if (rawValue === "" || /^\d*\.?\d*$/.test(rawValue)) {
+      setToAmount(rawValue);
+      if (
+        selectedFromToken &&
+        selectedToToken &&
+        selectedFromToken.currency === selectedToToken.currency
+      ) {
+        setFromAmount(rawValue);
+        return;
+      }
+      if (rawValue && !isNaN(parseFloat(rawValue))) {
+        const amount = parseFloat(rawValue);
+        if (
+          selectedFromToken &&
+          selectedToToken &&
+          selectedFromToken.price > 0 &&
+          selectedToToken.price > 0
+        ) {
+          import("@/lib/api").then((m) => {
+            const converted = m.convertAmount(
+              amount,
+              selectedToToken,
+              selectedFromToken
+            );
+            setFromAmount(converted > 0 ? String(converted) : "");
+          });
+        } else {
+          setFromAmount("");
+        }
+      } else {
+        setFromAmount("");
+      }
+    }
+  };
+
+  // Đã xử lý swap đúng bằng switchTokens, không cần tự động tính lại số lượng khi đổi token
+
+  const switchedRef = useRef(false);
+  const handleSwitchTokens = () => {
+    setFromToken(toToken);
+    setToToken(fromToken);
+    // Always recalculate To value and rate after switching
+    setTimeout(() => {
+      handleFromAmountChange(fromAmount);
+    }, 0);
+    switchedRef.current = true;
+  };
+  // Đã loại bỏ useEffect này, logic chuyển token đã được xử lý trong handleSwitchTokens và các hàm input.
 
   const handleSwap = async () => {
     if (!validateSwap(fromToken, toToken, fromAmount)) return;
 
     setIsSwapping(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     setIsSwapping(false);
 
     alert(
@@ -100,9 +183,9 @@ export function SwapForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-zinc-900 dark:via-zinc-800 dark:to-purple-950 transition-all">
+    <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-zinc-900 dark:via-zinc-800 dark:to-purple-950 transition-all">
       <ThemeSwitcher />
-      <Card className="w-full max-w-md shadow-2xl dark:bg-zinc-900/80 dark:text-white">
+      <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl dark:bg-zinc-900/80 dark:text-white px-2 sm:px-4 py-4">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Swap Tokens
@@ -119,7 +202,10 @@ export function SwapForm() {
               <TokenSelect
                 value={fromToken}
                 tokens={tokens}
-                onValueChange={setFromToken}
+                onValueChange={(token) => {
+                  setFromToken(token);
+                  handleFromAmountChange(fromAmount);
+                }}
                 error={getError("fromToken")}
               />
               <AmountInput
@@ -130,6 +216,7 @@ export function SwapForm() {
                 formatValue={formatInputValue}
               />
             </div>
+            {/* Remove USD display below input */}
           </div>
 
           {/* Switch Button */}
@@ -151,7 +238,10 @@ export function SwapForm() {
               <TokenSelect
                 value={toToken}
                 tokens={tokens}
-                onValueChange={setToToken}
+                onValueChange={(token) => {
+                  setToToken(token);
+                  handleFromAmountChange(fromAmount);
+                }}
                 error={getError("toToken")}
               />
               <AmountInput
@@ -160,8 +250,10 @@ export function SwapForm() {
                 error={getError("toToken")}
                 selectedToken={selectedToToken}
                 formatValue={formatInputValue}
+                disabled
               />
             </div>
+            {/* Remove USD display below input */}
           </div>
 
           {/* Exchange Rate Info */}

@@ -2,7 +2,6 @@ import { convertAmount, MAX_INPUT_LENGTH, parseInputValue } from '@/lib/swapHelp
 import { useSwapStore } from '@/store/swapStore';
 import type { Token } from '@/types';
 import { useCallback } from 'react';
-// All formatting and parsing logic is now in swapHelper.ts
 
 export const useSwapCalculation = (
   selectedFromToken: Token | undefined,
@@ -23,7 +22,7 @@ export const useSwapCalculation = (
 
       if (rawValue && !isNaN(parseFloat(rawValue))) {
         const amount = parseFloat(rawValue);
-        // Nếu token giống nhau thì toAmount = fromAmount
+        // Check if toAmount = fromAmount
         if (selectedFromToken && selectedToToken && selectedFromToken.currency === selectedToToken.currency) {
           setToAmount(rawValue);
         } else if (selectedFromToken && selectedToToken && selectedFromToken.price > 0 && selectedToToken.price > 0) {
@@ -49,7 +48,7 @@ export const useSwapCalculation = (
 
       if (rawValue && !isNaN(parseFloat(rawValue))) {
         const amount = parseFloat(rawValue);
-        // Nếu token giống nhau thì fromAmount = toAmount
+        // Check if fromAmount = toAmount
         if (selectedFromToken && selectedToToken && selectedFromToken.currency === selectedToToken.currency) {
           setFromAmount(rawValue);
         } else if (selectedFromToken && selectedToToken && selectedFromToken.price > 0 && selectedToToken.price > 0) {

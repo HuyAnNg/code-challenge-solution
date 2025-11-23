@@ -65,7 +65,6 @@ export function SwapForm() {
   const { validateSwap, getError } = useSwapValidation();
 
   // Calculation logic
-  // Helper for removing commas
   const parseInputValue = (value: string) => value.replace(/,/g, "");
   const MAX_INPUT_LENGTH = 20;
 
@@ -82,7 +81,6 @@ export function SwapForm() {
         setToAmount(rawValue);
         return;
       }
-      // Always run conversion logic, even if rawValue is empty
       if (rawValue && !isNaN(parseFloat(rawValue))) {
         const amount = parseFloat(rawValue);
         if (
@@ -103,7 +101,6 @@ export function SwapForm() {
           setToAmount("");
         }
       } else {
-        // If input is empty, clear the toAmount
         setToAmount("");
       }
     }
@@ -147,19 +144,35 @@ export function SwapForm() {
     }
   };
 
-  // Đã xử lý swap đúng bằng switchTokens, không cần tự động tính lại số lượng khi đổi token
-
   const switchedRef = useRef(false);
   const handleSwitchTokens = () => {
     setFromToken(toToken);
     setToToken(fromToken);
-    // Always recalculate To value and rate after switching
     setTimeout(() => {
-      handleFromAmountChange(fromAmount);
+      // Always recalculate To value and rate after switching
+      if (fromAmount === "" || isNaN(Number(fromAmount))) {
+        setToAmount("");
+      } else if (
+        selectedFromToken &&
+        selectedToToken &&
+        selectedFromToken.price > 0 &&
+        selectedToToken.price > 0
+      ) {
+        const amount = parseFloat(fromAmount);
+        import("@/lib/api").then((m) => {
+          const converted = m.convertAmount(
+            amount,
+            selectedToToken,
+            selectedFromToken
+          );
+          setToAmount(converted > 0 ? String(converted) : "");
+        });
+      } else {
+        setToAmount("");
+      }
     }, 0);
     switchedRef.current = true;
   };
-  // Đã loại bỏ useEffect này, logic chuyển token đã được xử lý trong handleSwitchTokens và các hàm input.
 
   const handleSwap = async () => {
     if (!validateSwap(fromToken, toToken, fromAmount)) return;
@@ -172,6 +185,31 @@ export function SwapForm() {
       `Successfully swapped ${fromAmount} ${fromToken} to ${toAmount} ${toToken}`
     );
   };
+
+  useEffect(() => {
+    if (fromAmount === "" || isNaN(Number(fromAmount))) {
+      setToAmount("");
+      return;
+    }
+    if (
+      selectedFromToken &&
+      selectedToToken &&
+      selectedFromToken.price > 0 &&
+      selectedToToken.price > 0
+    ) {
+      const amount = parseFloat(fromAmount);
+      import("@/lib/api").then((m) => {
+        const converted = m.convertAmount(
+          amount,
+          selectedFromToken,
+          selectedToToken
+        );
+        setToAmount(converted > 0 ? String(converted) : "");
+      });
+    } else {
+      setToAmount("");
+    }
+  }, [fromToken, toToken, fromAmount, selectedFromToken, selectedToToken]);
 
   if (loading) {
     return (

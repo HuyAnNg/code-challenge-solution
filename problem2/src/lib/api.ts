@@ -3,7 +3,7 @@ import type { Token, TokenPrice } from '@/types';
 const PRICES_URL = 'https://interview.switcheo.com/prices.json';
 const TOKEN_ICONS_BASE_URL = 'https://raw.githubusercontent.com/Switcheo/token-icons/main/tokens';
 
-// Map các token có tên khác trong icon repository và display name
+// Map tokens and display name
 const TOKEN_DISPLAY_MAP: Record<string, string> = {
   'STATOM': 'stATOM',
   'STLUNA': 'stLUNA',
